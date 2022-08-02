@@ -27,10 +27,10 @@ def main():
     # Isolate sensor
     sensor.network_isolation_enabled = True
     sensor.save()
-    
+
     # Initiate Live Response session
     cblr = cb.live_response.request_session(sensor.id)
-    
+
     # Find processes by name, then kill them.
     process_list = cblr.list_processes()
     target_pids = [proc['pid'] for proc in process_list if target_process in proc['path']]
@@ -39,10 +39,7 @@ def main():
 
     # Ban the hash
     process_list = cb.select(Process).where("process_name:{0}".format(args.process_name))
-    target_md5s = set()
-    for process in process_list:
-        target_md5s.add(process.process_md5)
-
+    target_md5s = {process.process_md5 for process in process_list}
     for md5 in target_md5s:
         banned_hash = cb.create(BannedHash)
         banned_hash.md5hash = md5

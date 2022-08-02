@@ -15,10 +15,7 @@ from cbapi.response.models import Process, Sensor
 from cbapi.errors import *
 
 
-if sys.version_info.major >= 3:
-    _python3 = True
-else:
-    _python3 = False
+_python3 = sys.version_info.major >= 3
 
 
 def process_search(cb_conn, query, query_base=None,
@@ -37,9 +34,7 @@ def process_search(cb_conn, query, query_base=None,
     results = []
 
     try:
-        process_counter = 0
-        for proc in query_result:
-            process_counter += 1
+        for process_counter, proc in enumerate(query_result, start=1):
             if process_counter % 10 == 0:
                 log_info('Processing {0} of {1}'.format(process_counter, query_result_len))
 
@@ -69,62 +64,84 @@ def process_search(cb_conn, query, query_base=None,
                                 ))
 
             if netconns == True:
-                for netconn in proc.all_netconns():
-                    results.append(('netconn',
-                                    convert_timestamp(netconn.timestamp),
-                                    hostname,
-                                    username,
-                                    path,
-                                    cmdline,
-                                    process_md5,
-                                    parent_name,
-                                    proc.childproc_count,
-                                    proc.webui_link,
-                                    netconn.domain,
-                                    netconn.remote_ip,
-                                    netconn.remote_port,
-                                    netconn.local_ip,
-                                    netconn.local_port,
-                                    netconn.proto,
-                                    netconn.direction
-                                    ))
+                results.extend(
+                    (
+                        'netconn',
+                        convert_timestamp(netconn.timestamp),
+                        hostname,
+                        username,
+                        path,
+                        cmdline,
+                        process_md5,
+                        parent_name,
+                        proc.childproc_count,
+                        proc.webui_link,
+                        netconn.domain,
+                        netconn.remote_ip,
+                        netconn.remote_port,
+                        netconn.local_ip,
+                        netconn.local_port,
+                        netconn.proto,
+                        netconn.direction,
+                    )
+                    for netconn in proc.all_netconns()
+                )
 
             if filemods == True:
-                for filemod in proc.all_filemods():
-                    results.append(('filemod',
-                                    convert_timestamp(filemod.timestamp),
-                                    hostname,
-                                    username,
-                                    path,
-                                    cmdline,
-                                    process_md5,
-                                    parent_name,
-                                    proc.childproc_count,
-                                    proc.webui_link,
-                                    '','','','','','','', # netconn
-                                    filemod.path,
-                                    filemod.type,
-                                    filemod.md5
-                                    ))
+                results.extend(
+                    (
+                        'filemod',
+                        convert_timestamp(filemod.timestamp),
+                        hostname,
+                        username,
+                        path,
+                        cmdline,
+                        process_md5,
+                        parent_name,
+                        proc.childproc_count,
+                        proc.webui_link,
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        filemod.path,
+                        filemod.type,
+                        filemod.md5,
+                    )
+                    for filemod in proc.all_filemods()
+                )
 
             if regmods == True:
-                for regmod in proc.all_regmods():
-                    results.append(('regmod',
-                                    convert_timestamp(regmod.timestamp),
-                                    hostname,
-                                    username,
-                                    path,
-                                    cmdline,
-                                    process_md5,
-                                    parent_name,
-                                    proc.childproc_count,
-                                    proc.webui_link,
-                                    '','','','','','','',   # netconn
-                                    '','','',               # filemod
-                                    regmod.path,
-                                    regmod.type
-                                    ))
-
+                results.extend(
+                    (
+                        'regmod',
+                        convert_timestamp(regmod.timestamp),
+                        hostname,
+                        username,
+                        path,
+                        cmdline,
+                        process_md5,
+                        parent_name,
+                        proc.childproc_count,
+                        proc.webui_link,
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        regmod.path,
+                        regmod.type,
+                    )
+                    for regmod in proc.all_regmods()
+                )
 
     except KeyboardInterrupt:
         log_info("Caught CTRL-C. Returning what we have . . .")
@@ -154,11 +171,7 @@ def main():
     else:
         filename = 'timeline.csv'
 
-    if args.append == True or args.queryfile is not None:
-        file_mode = 'a'
-    else:
-        file_mode = 'w'
-
+    file_mode = 'a' if args.append == True or args.queryfile is not None else 'w'
     if args.days:
         query_base = ' start:-{0}m'.format(args.days*1440)
     elif args.minutes:
@@ -191,48 +204,45 @@ def main():
         queries.append(args.query)
     elif args.queryfile:
         with open(args.queryfile, 'r') as f:
-            for query in f.readlines():
-                queries.append(query.strip())
+            queries.extend(query.strip() for query in f)
         f.close()
     else:
         queries.append('')
 
-    file = open(filename, file_mode)
-    writer = csv.writer(file)
-    writer.writerow(["event_type",
-                     "timestamp",
-                     "hostname",
-                     "username",
-                     "path",
-                     "cmdline",
-                     "process_md5",
-                     "parent",
-                     "childproc_count",
-                     "url",
-                     "netconn_domain",
-                     "netconn_remote_ip",
-                     "netconn_remote_port",
-                     "netconn_local_ip",
-                     "netconn_local_port",
-                     "netconn_proto",
-                     "netconn_direction",
-                     "filemod_path",
-                     "filemod_type",
-                     "filemod_md5",
-                     "regmod_path",
-                     "regmod_type"
-                     ])
+    with open(filename, file_mode) as file:
+        writer = csv.writer(file)
+        writer.writerow(["event_type",
+                         "timestamp",
+                         "hostname",
+                         "username",
+                         "path",
+                         "cmdline",
+                         "process_md5",
+                         "parent",
+                         "childproc_count",
+                         "url",
+                         "netconn_domain",
+                         "netconn_remote_ip",
+                         "netconn_remote_port",
+                         "netconn_local_ip",
+                         "netconn_local_port",
+                         "netconn_proto",
+                         "netconn_direction",
+                         "filemod_path",
+                         "filemod_type",
+                         "filemod_md5",
+                         "regmod_path",
+                         "regmod_type"
+                         ])
 
-    for query in queries:
-        result_set = process_search(cb, query, query_base, filemods, netconns,
-                                    processes, regmods)
+        for query in queries:
+            result_set = process_search(cb, query, query_base, filemods, netconns,
+                                        processes, regmods)
 
-        for row in result_set:
-            if _python3 == False:
-                row = [col.encode('utf8') if isinstance(col, unicode) else col for col in row]
-            writer.writerow(row)
-
-    file.close()
+            for row in result_set:
+                if _python3 == False:
+                    row = [col.encode('utf8') if isinstance(col, unicode) else col for col in row]
+                writer.writerow(row)
 
 
 if __name__ == '__main__':

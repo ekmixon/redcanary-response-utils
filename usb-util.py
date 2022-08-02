@@ -6,6 +6,7 @@ OVERVIEW
 Extract USB mass storage device events from Cb Response.
 """
 
+
 import argparse
 import csv
 import json
@@ -18,12 +19,7 @@ from cbapi.response import CbEnterpriseResponseAPI
 from cbapi.response.models import Process
 
 
-if sys.version_info.major >= 3:
-    _python3 = True
-else:
-    _python3 = False
-
-
+_python3 = sys.version_info.major >= 3
 # Use these to find registry events of interest. Disk device class is probably
 # what you want, but you may also choose to fool with the volume device class
 # as well: '{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}'
@@ -109,7 +105,7 @@ def main():
         sys.exit("queryfile not supported in this utility")
 
     if args.prefix:
-        output_filename = '%s-usbstor.csv' % args.prefix
+        output_filename = f'{args.prefix}-usbstor.csv'
     else:
         output_filename = 'usbstor.csv'
 
@@ -118,30 +114,28 @@ def main():
     else:
         cb = CbEnterpriseResponseAPI()
 
-    output_file = open(output_filename, 'w')
-    writer = csv.writer(output_file, quoting=csv.QUOTE_ALL)
+    with open(output_filename, 'w') as output_file:
+        writer = csv.writer(output_file, quoting=csv.QUOTE_ALL)
 
-    header_row = ['endpoint', 'vendor', 'product', 'version', 'serial']
-    if args.timestamps == True:
-        header_row.insert(0, 'timestamp')
-    writer.writerow(header_row)
+        header_row = ['endpoint', 'vendor', 'product', 'version', 'serial']
+        if args.timestamps == True:
+            header_row.insert(0, 'timestamp')
+        writer.writerow(header_row)
 
-    for term in search_terms:
-        query = 'process_name:ntoskrnl.exe regmod:%s' % term
+        for term in search_terms:
+            query = f'process_name:ntoskrnl.exe regmod:{term}'
 
-        if args.days:
-            query += ' last_update:-%dm' % (args.days*1440)
-        elif args.minutes:
-            query += ' last_update:-%dm' % args.minutes
+            if args.days:
+                query += ' last_update:-%dm' % (args.days*1440)
+            elif args.minutes:
+                query += ' last_update:-%dm' % args.minutes
 
-        results = usbstor_search(cb, query, query_base=args.query, timestamps=args.timestamps)
+            results = usbstor_search(cb, query, query_base=args.query, timestamps=args.timestamps)
 
-        for row in results:
-            if _python3 == False:
-                row = [col.encode('utf8') if isinstance(col, unicode) else col for col in list(row)]
-            writer.writerow(row)
-
-    output_file.close()
+            for row in results:
+                if _python3 == False:
+                    row = [col.encode('utf8') if isinstance(col, unicode) else col for col in list(row)]
+                writer.writerow(row)
 
 
 if __name__ == '__main__':

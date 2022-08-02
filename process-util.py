@@ -15,10 +15,7 @@ from cbapi.response.models import Process, Sensor
 from cbapi.errors import *
 
 
-if sys.version_info.major >= 3:
-    _python3 = True
-else:
-    _python3 = False
+_python3 = sys.version_info.major >= 3
 
 
 def get_process_details(process):
@@ -63,9 +60,7 @@ def process_search(cb_conn, query, query_base=None, groupby=None):
     results = []
 
     try:
-        process_counter = 0
-        for process in query_result:
-            process_counter += 1
+        for process_counter, process in enumerate(query_result, start=1):
             if process_counter % 100 == 0:
                 log_info('Processing {0} of {1}'.format(process_counter, query_result_len))
 
@@ -88,11 +83,7 @@ def main():
     else:
         output_filename = 'processes.csv'
 
-    if args.append == True or args.queryfile is not None:
-        file_mode = 'a'
-    else:
-        file_mode = 'w'
-
+    file_mode = 'a' if args.append == True or args.queryfile is not None else 'w'
     if args.days:
         query_base = ' start:-{0}m'.format(args.days*1440)
     elif args.minutes:
@@ -105,48 +96,39 @@ def main():
     else:
         cb = CbEnterpriseResponseAPI()
 
-    if args.groupby:
-        groupby = args.groupby
-    else:
-        groupby = None
-
+    groupby = args.groupby or None
     queries = []
     if args.query:
         queries.append(args.query)
     elif args.queryfile:
         with open(args.queryfile, 'r') as f:
-            for query in f.readlines():
-                queries.append(query.strip())
+            queries.extend(query.strip() for query in f)
         f.close()
     else:
         queries.append('')
-    # END Common 
+    with open(output_filename, file_mode) as output_file:
+        writer = csv.writer(output_file)
+        writer.writerow(["proc_timestamp",
+                         "proc_hostname",
+                         "proc_username",
+                         "proc_path",
+                         "proc_cmdline",
+                         "proc_md5",
+                         "proc_child_count",
+                         "proc_filemod_count",
+                         "proc_modload_count",
+                         "proc_netconn_count",
+                         "proc_url",
+                         "parent_name"
+                         ])
 
-    output_file = open(output_filename, file_mode)
-    writer = csv.writer(output_file)
-    writer.writerow(["proc_timestamp",
-                     "proc_hostname",
-                     "proc_username",
-                     "proc_path",
-                     "proc_cmdline",
-                     "proc_md5",
-                     "proc_child_count",
-                     "proc_filemod_count",
-                     "proc_modload_count",
-                     "proc_netconn_count",
-                     "proc_url",
-                     "parent_name"
-                     ])
+        for query in queries:
+            result_set = process_search(cb, query, query_base, groupby)
 
-    for query in queries:
-        result_set = process_search(cb, query, query_base, groupby)
-
-        for row in result_set:
-            if _python3 == False:
-                row = [col.encode('utf8') if isinstance(col, unicode) else col for col in row]
-            writer.writerow(row)
-
-    output_file.close()
+            for row in result_set:
+                if _python3 == False:
+                    row = [col.encode('utf8') if isinstance(col, unicode) else col for col in row]
+                writer.writerow(row)
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ OVERVIEW
 Extract selected sensor information from Cb Response.
 """
 
+
 import argparse
 import csv
 import os
@@ -15,10 +16,7 @@ from cbapi.response import CbEnterpriseResponseAPI
 from cbapi.response.models import Process, Sensor
 
 
-if sys.version_info.major >= 3:
-    _python3 = True
-else:
-    _python3 = False
+_python3 = sys.version_info.major >= 3
 
 
 def log_err(msg):
@@ -65,7 +63,7 @@ def main():
     args = parser.parse_args()
 
     if args.prefix:
-        output_filename = '%s-sensors.csv' % args.prefix
+        output_filename = f'{args.prefix}-sensors.csv'
     else:
         output_filename = 'sensors.csv'
 
@@ -74,115 +72,116 @@ def main():
     else:
         cb = CbEnterpriseResponseAPI()
 
-    output_file = open(output_filename, 'w')
-    writer = csv.writer(output_file, quoting=csv.QUOTE_ALL)
+    with open(output_filename, 'w') as output_file:
+        writer = csv.writer(output_file, quoting=csv.QUOTE_ALL)
 
-    header_row = ['computer_name', 
-                  'computer_dns_name',
-                  'sensor_group_id',
-                  'os',
-                  'os_type',
-                  'computer_sid',
-                  'last_checkin_time',
-                  'registration_time',
-                  'network_adapters',
-                  'id',
-                  'group_id',
-                  'group_name',
-                  'num_eventlog_mb',
-                  'num_storefiles_mb',
-                  'systemvolume_free_size',
-                  'systemvolume_total_size',
-                  'health',
-                  'commit_charge_mb',
-                  'build_version_string',
-                  'process_count',
-                  'tamper_count',
-                  'clock_delta',
-                  'checkin_ip']
-    writer.writerow(header_row)
+        header_row = ['computer_name', 
+                      'computer_dns_name',
+                      'sensor_group_id',
+                      'os',
+                      'os_type',
+                      'computer_sid',
+                      'last_checkin_time',
+                      'registration_time',
+                      'network_adapters',
+                      'id',
+                      'group_id',
+                      'group_name',
+                      'num_eventlog_mb',
+                      'num_storefiles_mb',
+                      'systemvolume_free_size',
+                      'systemvolume_total_size',
+                      'health',
+                      'commit_charge_mb',
+                      'build_version_string',
+                      'process_count',
+                      'tamper_count',
+                      'clock_delta',
+                      'checkin_ip']
+        writer.writerow(header_row)
 
-    query_base = None
-    if args.group_id:
-        query_base = 'groupid:{0}'.format(args.group_id)
-    elif args.hostname:
-        query_base = 'hostname:{0}'.format(args.hostname)
-    elif args.ip:
-        query_base = 'ip:{0}'.format(args.ip)
+        query_base = None
+        if args.group_id:
+            query_base = 'groupid:{0}'.format(args.group_id)
+        elif args.hostname:
+            query_base = 'hostname:{0}'.format(args.hostname)
+        elif args.ip:
+            query_base = 'ip:{0}'.format(args.ip)
 
-    if query_base is None:
-        sensors = cb.select(Sensor)
-    else:
-        sensors = cb.select(Sensor).where(query_base)
-
-    num_sensors = len(sensors)
-    log_info("Found {0} sensors".format(num_sensors))
-
-    counter = 1
-    for sensor in sensors:
-        if counter % 10 == 0:
-            print("{0} of {1}".format(counter, num_sensors))
-
-        if len(sensor.resource_status) > 0:
-            commit_charge = "{0:.2f}".format(float(sensor.resource_status[0]['commit_charge'])/1024/1024)
+        if query_base is None:
+            sensors = cb.select(Sensor)
         else:
-            commit_charge = ''
-        num_eventlog_mb = "{0:.2f}".format(float(sensor.num_eventlog_bytes)/1024/1024)
-        num_storefiles_mb = "{0:.2f}".format(float(sensor.num_storefiles_bytes)/1024/1024)
-        systemvolume_free_size = "{0:.2f}".format(float(sensor.systemvolume_free_size)/1024/1024)
-        systemvolume_total_size = "{0:.2f}".format(float(sensor.systemvolume_total_size)/1024/1024)
+            sensors = cb.select(Sensor).where(query_base)
 
-        if args.process_count == True:
-            process_count = len(cb.select(Process).where('sensor_id:{0}'.format(sensor.id)))
-        else:
-            process_count = ''
+        num_sensors = len(sensors)
+        log_info("Found {0} sensors".format(num_sensors))
 
-        if args.checkin_ip == True:
-            try:
-                checkin_ip = cb.select(Process).where('sensor_id:{0}'.format(sensor.id)).first().comms_ip
-            except AttributeError:
+        for counter, sensor in enumerate(sensors, start=1):
+            if counter % 10 == 0:
+                print("{0} of {1}".format(counter, num_sensors))
+
+            commit_charge = (
+                "{0:.2f}".format(
+                    float(sensor.resource_status[0]['commit_charge'])
+                    / 1024
+                    / 1024
+                )
+                if len(sensor.resource_status) > 0
+                else ''
+            )
+
+            num_eventlog_mb = "{0:.2f}".format(float(sensor.num_eventlog_bytes)/1024/1024)
+            num_storefiles_mb = "{0:.2f}".format(float(sensor.num_storefiles_bytes)/1024/1024)
+            systemvolume_free_size = "{0:.2f}".format(float(sensor.systemvolume_free_size)/1024/1024)
+            systemvolume_total_size = "{0:.2f}".format(float(sensor.systemvolume_total_size)/1024/1024)
+
+            if args.process_count == True:
+                process_count = len(cb.select(Process).where('sensor_id:{0}'.format(sensor.id)))
+            else:
+                process_count = ''
+
+            if args.checkin_ip == True:
+                try:
+                    checkin_ip = cb.select(Process).where('sensor_id:{0}'.format(sensor.id)).first().comms_ip
+                except AttributeError:
+                    checkin_ip = ''
+            else:
                 checkin_ip = ''
-        else:
-            checkin_ip = ''
 
-        if args.tamper_count == True:
-            tamper_count = len(cb.select(Process).where('tampered:true AND sensor_id:{0}'.format(sensor.id)))
-        else:
-            tamper_count = ''
+            if args.tamper_count == True:
+                tamper_count = len(cb.select(Process).where('tampered:true AND sensor_id:{0}'.format(sensor.id)))
+            else:
+                tamper_count = ''
 
-        output_fields = [sensor.computer_name.lower(),
-                         sensor.computer_dns_name.lower(),
-                         sensor.group_id,
-                         sensor.os,
-                         sensor.os_type,
-                         sensor.computer_sid,
-                         sensor.last_checkin_time,
-                         sensor.registration_time,
-                         sensor.network_adapters,
-                         sensor.id,
-                         sensor.group_id,
-                         sensor.group.name,
-                         num_eventlog_mb,
-                         num_storefiles_mb,
-                         systemvolume_free_size,
-                         systemvolume_total_size,
-                         sensor.sensor_health_message,
-                         commit_charge,
-                         sensor.build_version_string,
-                         process_count,
-                         tamper_count,
-                         sensor.clock_delta,
-                         checkin_ip]
+            output_fields = [sensor.computer_name.lower(),
+                             sensor.computer_dns_name.lower(),
+                             sensor.group_id,
+                             sensor.os,
+                             sensor.os_type,
+                             sensor.computer_sid,
+                             sensor.last_checkin_time,
+                             sensor.registration_time,
+                             sensor.network_adapters,
+                             sensor.id,
+                             sensor.group_id,
+                             sensor.group.name,
+                             num_eventlog_mb,
+                             num_storefiles_mb,
+                             systemvolume_free_size,
+                             systemvolume_total_size,
+                             sensor.sensor_health_message,
+                             commit_charge,
+                             sensor.build_version_string,
+                             process_count,
+                             tamper_count,
+                             sensor.clock_delta,
+                             checkin_ip]
 
-        if _python3 == False:
-            row = [col.encode('utf8') if isinstance(col, unicode) else col for col in output_fields]
-        else:
-            row = output_fields
-        writer.writerow(row)
-
-        counter += 1
-
-    output_file.close()
+            if _python3 == False:
+                row = [col.encode('utf8') if isinstance(col, unicode) else col for col in output_fields]
+            else:
+                row = output_fields
+            writer.writerow(row)
 
 
 if __name__ == '__main__':

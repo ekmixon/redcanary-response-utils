@@ -64,6 +64,7 @@ CREDITS
 - Many early improvements from TS.
 """
 
+
 import argparse
 import csv
 import ipaddress
@@ -79,29 +80,18 @@ from cbapi.response import CbEnterpriseResponseAPI
 from cbapi.response.models import Process, Sensor
 
 
-if sys.version_info.major >= 3:
-    _python3 = True
-else:
-    _python3 = False
+_python3 = sys.version_info.major >= 3
 
 
 def build_whitelist(filename):
-    f = open(filename, 'rb')
-    terms = f.readlines()
-    f.close()
-
-    whitelist = ''
-    for term in terms:
-        whitelist += ' {0}'.format(term.strip())
-
-    return whitelist
+    with open(filename, 'rb') as f:
+        terms = f.readlines()
+    return ''.join(' {0}'.format(term.strip()) for term in terms)
 
 
 def get_hosts(filename):
-    f = open(filename, 'rb')
-    hosts = f.readlines()
-    f.close()
-
+    with open(filename, 'rb') as f:
+        hosts = f.readlines()
     filtered_hosts = set()
     for host in hosts:
         host = host.strip()
@@ -256,15 +246,11 @@ def main():
     args = parser.parse_args()
 
     if args.prefix:
-        output_filename = '%s-netconns.csv' % args.prefix
+        output_filename = f'{args.prefix}-netconns.csv'
     else:
         output_filename = 'netconns.csv'
 
-    if args.append == True or args.queryfile is not None:
-        file_mode = 'a'
-    else:
-        file_mode = 'w'
-
+    file_mode = 'a' if args.append == True or args.queryfile is not None else 'w'
     # Query buildup
     if args.days:
         query_base = ' start:-%dm' % (args.days*1440)
@@ -290,11 +276,11 @@ def main():
         ignore_hosts = get_hosts(args.ignore_hosts)
 
     if args.domain:
-        query_base += ' domain:%s' % args.domain
+        query_base += f' domain:{args.domain}'
     elif args.ipaddr:
-        query_base += ' ipaddr:%s' % args.ipaddr
+        query_base += f' ipaddr:{args.ipaddr}'
     elif args.port:
-        query_base += ' ipport:%s' % args.port
+        query_base += f' ipport:{args.port}'
     else:
         query_base += ' netconn_count:[1 TO *]'
 
@@ -324,47 +310,42 @@ def main():
         queries.append(args.query)
     elif args.queryfile:
         with open(args.queryfile, 'r') as f:
-            for query in f.readlines():
-                if ':' in query:
-                    queries.append(query.strip())
+            queries.extend(query.strip() for query in f if ':' in query)
         f.close()
     else:
         queries.append('')
 
-    # Main routine and output
-    output_file = open(output_filename, file_mode)
-    writer = csv.writer(output_file)
-    if args.append is False:
-        writer.writerow(["timestamp",
-                        "path",
-                        "hostname",
-                        "username",
-                        "domain",
-                        "proto",
-                        "direction",
-                        "local_ip",
-                        "local_port",
-                        "remote_ip",
-                        "remote_port"])
+    with open(output_filename, file_mode) as output_file:
+        writer = csv.writer(output_file)
+        if args.append is False:
+            writer.writerow(["timestamp",
+                            "path",
+                            "hostname",
+                            "username",
+                            "domain",
+                            "proto",
+                            "direction",
+                            "local_ip",
+                            "local_port",
+                            "remote_ip",
+                            "remote_port"])
 
-    for query in queries:
-        result_set = process_search(cb, query, query_base,
-            limit=args.inspect_limit,
-            direction=direction,
-            loopback=args.noloopback,
-            ignore_hosts=args.ignore_hosts,
-            ignore_private_dest=args.ignore_private_dest,
-            multicast=args.nomulticast,
-            tcp=tcp, udp=udp,
-            domain=args.domain)
+        for query in queries:
+            result_set = process_search(cb, query, query_base,
+                limit=args.inspect_limit,
+                direction=direction,
+                loopback=args.noloopback,
+                ignore_hosts=args.ignore_hosts,
+                ignore_private_dest=args.ignore_private_dest,
+                multicast=args.nomulticast,
+                tcp=tcp, udp=udp,
+                domain=args.domain)
 
-        for r in result_set:
-            row = list(r)
-            if _python3 == False:
-                row = [col.encode('utf8') if isinstance(col, unicode) else col for col in row]
-            writer.writerow(row)
-
-    output_file.close()
+            for r in result_set:
+                row = list(r)
+                if _python3 == False:
+                    row = [col.encode('utf8') if isinstance(col, unicode) else col for col in row]
+                writer.writerow(row)
 
 
 if __name__ == '__main__':
